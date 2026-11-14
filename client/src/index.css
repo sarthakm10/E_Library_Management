@@ -1,0 +1,192 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ───────────────────────── Design tokens ───────────────────────── */
+@theme {
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+
+  /* Light: crisp paper with violet ink */
+  --color-bg: #f6f6f8;
+  --color-surface: rgb(255 255 255 / 0.7);
+  --color-surface-2: rgb(12 12 24 / 0.045);
+  --color-elevated: #ffffff;
+  --color-border: rgb(12 12 24 / 0.09);
+  --color-ink: #0b0b12;
+  --color-muted: #676775;
+  --color-accent: #7c3aed;
+  --color-accent-ink: #ffffff;
+  --color-accent-soft: rgb(124 58 237 / 0.1);
+  --color-cyan: #0891b2;
+  --color-lime: #4d7c0f;
+  --color-gold: #b7791f;
+  --color-success: #15803d;
+  --color-success-soft: rgb(21 128 61 / 0.1);
+  --color-warning: #b45309;
+  --color-warning-soft: rgb(180 83 9 / 0.1);
+  --color-danger: #dc2626;
+  --color-danger-soft: rgb(220 38 38 / 0.09);
+
+  --radius-card: 1.25rem;
+  --shadow-soft: 0 1px 1px rgb(12 12 24 / 0.03), 0 8px 24px -14px rgb(12 12 24 / 0.18);
+  --shadow-lift: 0 2px 4px rgb(12 12 24 / 0.04), 0 30px 60px -24px rgb(12 12 24 / 0.3);
+  --shadow-glow: 0 0 0 1px rgb(124 58 237 / 0.25), 0 10px 40px -10px rgb(124 58 237 / 0.45);
+}
+
+/* Dark: a reading room at midnight, lit by aurora */
+.dark {
+  --color-bg: #060609;
+  --color-surface: rgb(255 255 255 / 0.035);
+  --color-surface-2: rgb(255 255 255 / 0.06);
+  --color-elevated: #0f0f15;
+  --color-border: rgb(255 255 255 / 0.085);
+  --color-ink: #f4f4f7;
+  --color-muted: #8f8f9e;
+  --color-accent: #a78bfa;
+  --color-accent-ink: #0b0b12;
+  --color-accent-soft: rgb(167 139 250 / 0.14);
+  --color-cyan: #22d3ee;
+  --color-lime: #bef264;
+  --color-gold: #fbbf24;
+  --color-success: #4ade80;
+  --color-success-soft: rgb(74 222 128 / 0.12);
+  --color-warning: #fbbf24;
+  --color-warning-soft: rgb(251 191 36 / 0.12);
+  --color-danger: #f87171;
+  --color-danger-soft: rgb(248 113 113 / 0.12);
+  --shadow-soft: 0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 8px 24px -12px rgb(0 0 0 / 0.7);
+  --shadow-lift: 0 1px 0 0 rgb(255 255 255 / 0.06) inset, 0 30px 80px -20px rgb(0 0 0 / 0.9);
+  --shadow-glow: 0 0 0 1px rgb(167 139 250 / 0.35), 0 10px 50px -8px rgb(167 139 250 / 0.5);
+}
+
+/* ───────────────────────── Base ───────────────────────── */
+@layer base {
+  html { color-scheme: light; -webkit-tap-highlight-color: transparent; }
+  html.dark { color-scheme: dark; }
+  body {
+    @apply bg-bg text-ink font-sans antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+  h1, h2, h3 { @apply font-display tracking-tight; text-wrap: balance; }
+  p { text-wrap: pretty; }
+  ::selection { background: var(--color-accent); color: var(--color-accent-ink); }
+  :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  option { background: var(--color-elevated); color: var(--color-ink); }
+}
+
+/* ───────────────────────── Effects ───────────────────────── */
+@layer components {
+  /* Frosted glass panel */
+  .glass {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+  }
+
+  /* Accent gradient text */
+  .text-gradient {
+    background: linear-gradient(100deg, var(--color-accent) 0%, var(--color-cyan) 55%, var(--color-lime) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .text-fade {
+    background: linear-gradient(180deg, var(--color-ink) 30%, color-mix(in oklab, var(--color-ink) 45%, transparent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Rotating conic border, used for hero pills and primary CTAs */
+  .glow-border { position: relative; isolation: isolate; }
+  .glow-border::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: conic-gradient(from var(--angle), transparent 0deg 200deg, var(--color-accent) 260deg, var(--color-cyan) 300deg, var(--color-lime) 330deg, transparent 360deg);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: spin-angle 4s linear infinite;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  /* Mouse-following highlight; --mx/--my are set from JS */
+  .spotlight { position: relative; overflow: hidden; }
+  .spotlight::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), color-mix(in oklab, var(--color-accent) 16%, transparent), transparent 45%);
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .spotlight:hover::after { opacity: 1; }
+
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, var(--color-border) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--color-border) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+  .bg-dots {
+    background-image: radial-gradient(var(--color-border) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
+  .grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .mask-fade-x { mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
+  .mask-fade-b { mask-image: linear-gradient(180deg, #000 60%, transparent); }
+
+  .shimmer-text {
+    background: linear-gradient(90deg, var(--color-muted) 0%, var(--color-ink) 50%, var(--color-muted) 100%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 2.4s linear infinite;
+  }
+
+  .kbd {
+    @apply inline-flex h-5 min-w-5 items-center justify-center rounded-md border border-border bg-surface-2 px-1.5 font-mono text-[10px] font-medium text-muted;
+  }
+
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .scrollbar-thin { scrollbar-width: thin; }
+}
+
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes spin-angle { to { --angle: 360deg; } }
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes aurora-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(8%, 6%) scale(1.15); } }
+@keyframes aurora-b { 0%, 100% { transform: translate(0, 0) scale(1.1); } 50% { transform: translate(-10%, 4%) scale(0.95); } }
+@keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes aurora-c { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(4%, -8%) scale(1.2); } }
+
+/* Theme switch: circular reveal via the View Transitions API */
+::view-transition-old(root),
+::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
