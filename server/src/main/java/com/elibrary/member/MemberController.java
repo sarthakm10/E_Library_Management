@@ -1,6 +1,7 @@
 package com.elibrary.member;
 
 import com.elibrary.common.ApiException;
+import com.elibrary.issue.HoldRepository;
 import com.elibrary.issue.Issue;
 import com.elibrary.issue.IssueRepository;
 import com.elibrary.security.AuthUser;
@@ -17,11 +18,13 @@ public class MemberController {
     private final MemberRepository members;
     private final IssueRepository issues;
     private final PasswordService passwords;
+    private final HoldRepository holds;
 
-    public MemberController(MemberRepository members, IssueRepository issues, PasswordService passwords) {
+    public MemberController(MemberRepository members, IssueRepository issues, PasswordService passwords, HoldRepository holds) {
         this.members = members;
         this.issues = issues;
         this.passwords = passwords;
+        this.holds = holds;
     }
 
     // ---- admin ----
@@ -51,6 +54,7 @@ public class MemberController {
         if (open > 0) {
             throw ApiException.conflict(m.fullName() + " still has " + open + " book(s) issued. Collect them first.");
         }
+        holds.deleteByMember(id);
         members.delete(id);
     }
 

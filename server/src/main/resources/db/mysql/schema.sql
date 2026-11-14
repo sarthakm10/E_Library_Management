@@ -1,4 +1,6 @@
 -- E-Library tables for MySQL. Runs on every API start; IF NOT EXISTS / INSERT IGNORE make it safe to repeat.
+-- New tables for loan history, fines and holds (and the renew_count column) are added by com.elibrary.db.SchemaUpgrader.
+-- The 300-book catalog and sample members are loaded by com.elibrary.db.DataSeeder on an empty database.
 
 CREATE TABLE IF NOT EXISTS admin_login_tbl (
     username   VARCHAR(50)  NOT NULL PRIMARY KEY,

@@ -18,7 +18,11 @@ public record Book(
         int actualStock,
         int currentStock,
         String imageLink,
-        String imageUrl) {
+        String imageUrl,
+        /* Copies on the shelf kept aside for members whose holds are ready. */
+        int reserved,
+        /* Members queued for this book. */
+        int waiting) {
 
     public int issuedCount() {
         return Math.max(0, actualStock - currentStock);

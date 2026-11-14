@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
-import { AlertTriangle, BookCheck, BookUp, CheckCircle2, Loader2, Undo2, UserRound, XCircle } from 'lucide-react'
+import { AlertTriangle, BookCheck, Bookmark, BookUp, CheckCircle2, IndianRupee, Loader2, RefreshCw, Undo2, UserRound, X, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { BookCover } from '@/components/book-cover'
 import { Button } from '@/components/ui/button'
@@ -12,9 +12,9 @@ import { Badge, Card, PageHeader } from '@/components/ui/misc'
 import { ConfirmDialog } from '@/components/ui/modal'
 import { api, errorMessage } from '@/lib/api'
 import { DEFAULT_LOAN_DAYS } from '@/lib/constants'
-import { useBooks, useIssues, useMembers } from '@/lib/queries'
-import { cn, dueLabel, formatDate, initials, todayPlus } from '@/lib/utils'
-import type { Book, Issue, IssueLookup, Member } from '@/lib/types'
+import { keys, useBooks, useHolds, useIssues, useMembers } from '@/lib/queries'
+import { availableCopies, cn, currency, dueLabel, formatDate, initials, todayPlus } from '@/lib/utils'
+import type { Book, Hold, Issue, IssueLookup, Member, ReturnResult } from '@/lib/types'
 
 type Filter = 'all' | 'overdue' | 'soon'
 
@@ -57,17 +57,24 @@ export default function IssuesPage() {
     if (dBook && !info.bookName) return 'No book with that ID'
     if (dMember && !info.memberName) return 'No member with that ID'
     if (info.available === 0) return 'No copies on the shelf'
+    if (info.available != null && info.available - (info.reserved ?? 0) <= 0) return 'The copies on the shelf are kept aside for members whose holds are ready'
     if (info.memberStatus && info.memberStatus !== 'active') return `Member account is ${info.memberStatus === 'deactive' ? 'deactivated' : 'pending approval'}`
     if (info.alreadyIssued) return 'This member already has this book'
     return null
   })()
   const canIssue = Boolean(info?.bookName && info?.memberName && !problem && !pendingLookup)
+  const notes = info && !pendingLookup ? {
+    holdReady: info.holdStatus === 'ready' && !problem,
+    unpaid: dMember && info.memberName ? info.unpaidFines : 0,
+  } : null
 
   const refreshAll = () => {
     qc.invalidateQueries({ queryKey: ['issues'] })
     qc.invalidateQueries({ queryKey: ['books'] })
     qc.invalidateQueries({ queryKey: ['dashboard'] })
     qc.invalidateQueries({ queryKey: ['lookup'] })
+    qc.invalidateQueries({ queryKey: keys.holds })
+    qc.invalidateQueries({ queryKey: keys.history })
   }
 
   const issue = useMutation({
@@ -81,10 +88,23 @@ export default function IssuesPage() {
   })
 
   const doReturn = useMutation({
-    mutationFn: (i: Issue) => api.post('/api/admin/issues/return', { bookId: i.bookId, memberId: i.memberId }),
-    onSuccess: (_, i) => {
-      toast.success(`“${i.bookName}” returned`)
+    mutationFn: (i: Issue) => api.post<ReturnResult>('/api/admin/issues/return', { bookId: i.bookId, memberId: i.memberId }),
+    onSuccess: (r) => {
+      const parts = [
+        r.fine > 0 && `${r.daysLate} day${r.daysLate === 1 ? '' : 's'} late: fine ${currency.format(r.fine)} added to their account`,
+        r.holdReadyFor && `Keep this copy aside: it's now ready for ${r.holdReadyFor}`,
+      ].filter(Boolean)
+      toast.success(`“${r.bookName}” returned`, parts.length ? { description: parts.join('. '), duration: 8000 } : undefined)
       setReturning(null)
+      refreshAll()
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+
+  const renew = useMutation({
+    mutationFn: (i: Issue) => api.post<Issue>('/api/admin/issues/renew', { bookId: i.bookId, memberId: i.memberId }),
+    onSuccess: (i) => {
+      toast.success(`Renewed “${i.bookName}”`, { description: `Now due ${formatDate(i.dueDate)}` })
       refreshAll()
     },
     onError: (err) => toast.error(errorMessage(err)),
@@ -107,10 +127,14 @@ export default function IssuesPage() {
     { accessorKey: 'issueDate', header: 'Issued', cell: ({ getValue }) => <span className="text-muted">{formatDate(getValue<string>())}</span> },
     { accessorKey: 'dueDate', header: 'Due', cell: ({ row }) => (
       <div className="space-y-1"><p>{formatDate(row.original.dueDate)}</p>
-        <Badge tone={row.original.overdue ? 'danger' : (row.original.daysLeft ?? 99) <= 3 ? 'warning' : 'neutral'}>{dueLabel(row.original.daysLeft)}</Badge></div>) },
+        <Badge tone={row.original.overdue ? 'danger' : (row.original.daysLeft ?? 99) <= 3 ? 'warning' : 'neutral'}>{dueLabel(row.original.daysLeft)}</Badge>
+        {row.original.fine > 0 && <p className="text-xs font-medium text-danger">Fine {currency.format(row.original.fine)}</p>}</div>) },
     { id: 'actions', header: '', enableSorting: false, cell: ({ row }) => (
-      <div className="text-right"><Button size="sm" variant="outline" onClick={() => setReturning(row.original)}><Undo2 className="h-3.5 w-3.5" />Return</Button></div>) },
-  ], [])
+      <div className="flex justify-end gap-2">
+        <RenewButton issue={row.original} onRenew={(i) => renew.mutate(i)} />
+        <Button size="sm" variant="outline" onClick={() => setReturning(row.original)}><Undo2 className="h-3.5 w-3.5" />Return</Button>
+      </div>) },
+  ], [renew.mutate])
 
   return (
     <>
@@ -131,11 +155,13 @@ export default function IssuesPage() {
                     <p className="truncate text-sm font-medium">{b.bookName}</p>
                     <p className="truncate text-xs text-muted">{b.authorName} · <span className="font-mono">{b.bookId}</span></p>
                   </div>
-                  <Badge tone={b.currentStock > 0 ? 'success' : 'danger'}>{b.currentStock > 0 ? `${b.currentStock} on shelf` : 'All out'}</Badge>
+                  <Badge tone={availableCopies(b) > 0 ? 'success' : b.reserved > 0 ? 'warning' : 'danger'}>
+                    {availableCopies(b) > 0 ? `${availableCopies(b)} on shelf` : b.reserved > 0 ? 'On hold shelf' : 'All out'}
+                  </Badge>
                 </div>
               )} />
             <LookupLine loading={pendingLookup && !!bookId} empty={!bookId} ok={info?.bookName}
-              icon={BookCheck} detail={info?.available != null ? `${info.available} on shelf` : undefined} />
+              icon={BookCheck} detail={info?.available != null ? `${info.available} on shelf${info.reserved ? `, ${info.reserved} kept for holds` : ''}` : undefined} />
           </Field>
           <Field label="Member" htmlFor="memberId">
             <Combobox id="memberId" value={memberId} onChange={setMemberId} items={members} loading={loadingMembers}
@@ -165,6 +191,12 @@ export default function IssuesPage() {
         {problem && (
           <p className="mt-4 flex items-center gap-2 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger"><XCircle className="h-4 w-4" />{problem}</p>
         )}
+        {notes?.holdReady && (
+          <p className="mt-4 flex items-center gap-2 rounded-xl bg-success-soft px-3 py-2 text-sm text-success"><Bookmark className="h-4 w-4" />This member's hold is ready. Hand over the copy kept aside for them.</p>
+        )}
+        {!!notes?.unpaid && (
+          <p className="mt-4 flex items-center gap-2 rounded-xl bg-warning-soft px-3 py-2 text-sm text-warning"><IndianRupee className="h-4 w-4" />{info?.memberName} has {currency.format(notes.unpaid)} in unpaid fines. Collect it in History &amp; fines.</p>
+        )}
 
         {/* Returning is usually "this person / this book is back": show the matching loans right here. */}
         {(bookId || memberId) && (
@@ -180,7 +212,10 @@ export default function IssuesPage() {
                       <p className="truncate text-sm font-medium">{i.bookName}</p>
                       <p className="truncate text-xs text-muted">{i.memberName} · due {formatDate(i.dueDate)} · <span className={i.overdue ? 'text-danger' : undefined}>{dueLabel(i.daysLeft)}</span></p>
                     </div>
-                    <Button size="sm" variant="outline" onClick={() => setReturning(i)}><Undo2 className="h-3.5 w-3.5" />Return</Button>
+                    <div className="flex shrink-0 gap-2">
+                      <RenewButton issue={i} onRenew={(x) => renew.mutate(x)} />
+                      <Button size="sm" variant="outline" onClick={() => setReturning(i)}><Undo2 className="h-3.5 w-3.5" />Return</Button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -210,16 +245,81 @@ export default function IssuesPage() {
         }
       />
 
+      <HoldsCard />
+
       <ConfirmDialog
         open={Boolean(returning)}
         title="Return this book?"
-        message={returning && <>Mark <b className="text-ink">{returning.bookName}</b> as returned by <b className="text-ink">{returning.memberName}</b>.{returning.overdue && <> It is <b className="text-danger">{dueLabel(returning.daysLeft)}</b>.</>}</>}
+        message={returning && <>Mark <b className="text-ink">{returning.bookName}</b> as returned by <b className="text-ink">{returning.memberName}</b>.{returning.overdue && <> It is <b className="text-danger">{dueLabel(returning.daysLeft)}</b>, so a fine of <b className="text-danger">{currency.format(returning.fine)}</b> will be added to their account.</>}</>}
         confirmLabel="Mark returned"
         loading={doReturn.isPending}
         onConfirm={() => returning && doReturn.mutate(returning)}
         onClose={() => setReturning(null)}
       />
     </>
+  )
+}
+
+function RenewButton({ issue, onRenew }: { issue: Issue; onRenew: (i: Issue) => void }) {
+  return (
+    <Button size="sm" variant="ghost" disabled={Boolean(issue.renewBlock)} title={issue.renewBlock ?? `Extend by ${DEFAULT_LOAN_DAYS} days`}
+      onClick={() => onRenew(issue)}>
+      <RefreshCw className="h-3.5 w-3.5" />Renew{issue.renewCount > 0 && <span className="text-xs text-muted">{issue.renewCount}</span>}
+    </Button>
+  )
+}
+
+/** Everyone queuing for a book. Ready holds mean a copy should be on the hold shelf. */
+function HoldsCard() {
+  const qc = useQueryClient()
+  const { data: holds } = useHolds()
+  const [cancelling, setCancelling] = useState<Hold | null>(null)
+  const cancel = useMutation({
+    mutationFn: (h: Hold) => api.del(`/api/admin/holds/${encodeURIComponent(h.memberId)}/${encodeURIComponent(h.bookId)}`),
+    onSuccess: () => {
+      toast.success('Hold cancelled')
+      setCancelling(null)
+      qc.invalidateQueries({ queryKey: keys.holds })
+      qc.invalidateQueries({ queryKey: keys.books })
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+  if (!holds?.length) return null
+  const ready = holds.filter((h) => h.status === 'ready')
+  const waiting = holds.filter((h) => h.status === 'waiting')
+  return (
+    <Card className="mt-6 p-5 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 font-sans text-lg font-semibold"><Bookmark className="h-4 w-4 text-muted" />Holds</h2>
+        <div className="flex gap-2">
+          {ready.length > 0 && <Badge tone="success">{ready.length} ready to collect</Badge>}
+          {waiting.length > 0 && <Badge>{waiting.length} waiting</Badge>}
+        </div>
+      </div>
+      <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {[...ready, ...waiting].map((h) => (
+          <li key={`${h.memberId}-${h.bookId}`} className={cn('flex items-center gap-3 rounded-xl border px-3 py-2', h.status === 'ready' ? 'border-success/30 bg-success-soft/40' : 'border-border bg-surface-2/50')}>
+            <BookCover src={h.imageUrl} title={h.bookName} className="h-12 w-8 shrink-0 rounded-md text-[0px] [&_svg]:hidden" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{h.bookName}</p>
+              <p className="truncate text-xs text-muted">
+                {h.memberName} · {h.status === 'ready' ? `collect by ${formatDate(h.readyUntil)}` : `#${h.position} in line`}
+              </p>
+            </div>
+            <Button size="sm" variant="ghost" aria-label={`Cancel ${h.memberName}'s hold`} onClick={() => setCancelling(h)}><X className="h-4 w-4" /></Button>
+          </li>
+        ))}
+      </ul>
+      <ConfirmDialog
+        open={Boolean(cancelling)}
+        title="Cancel this hold?"
+        message={cancelling && <><b className="text-ink">{cancelling.memberName}</b> will lose their place for <b className="text-ink">{cancelling.bookName}</b>.{cancelling.status === 'ready' && ' The copy kept aside goes to the next person in line, or back on the shelf.'}</>}
+        confirmLabel="Cancel hold"
+        loading={cancel.isPending}
+        onConfirm={() => cancelling && cancel.mutate(cancelling)}
+        onClose={() => setCancelling(null)}
+      />
+    </Card>
   )
 }
 

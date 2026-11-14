@@ -33,3 +33,8 @@ export function initials(name: string): string {
 }
 
 export const currency = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })
+
+/** Copies a member could actually borrow now: on the shelf, minus those kept aside for ready holds. */
+export function availableCopies(book: { currentStock: number; reserved?: number }): number {
+  return Math.max(0, book.currentStock - (book.reserved ?? 0))
+}

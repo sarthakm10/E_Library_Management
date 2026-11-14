@@ -15,6 +15,7 @@ const ProfilePage = lazy(() => import('@/pages/ProfilePage'))
 const DashboardPage = lazy(() => import('@/pages/admin/DashboardPage'))
 const BooksAdminPage = lazy(() => import('@/pages/admin/BooksAdminPage'))
 const IssuesPage = lazy(() => import('@/pages/admin/IssuesPage'))
+const HistoryPage = lazy(() => import('@/pages/admin/HistoryPage'))
 const MembersPage = lazy(() => import('@/pages/admin/MembersPage'))
 const CatalogAdminPage = lazy(() => import('@/pages/admin/CatalogAdminPage'))
 
@@ -38,6 +39,7 @@ export function App() {
         <Route path="admin" element={<RequireRole role="admin"><AdminLayout /></RequireRole>}>
           <Route index element={<DashboardPage />} />
           <Route path="issues" element={<IssuesPage />} />
+          <Route path="history" element={<HistoryPage />} />
           <Route path="books" element={<BooksAdminPage />} />
           <Route path="members" element={<MembersPage />} />
           <Route path="authors" element={<CatalogAdminPage kind="authors" />} />

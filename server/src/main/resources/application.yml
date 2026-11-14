@@ -32,6 +32,11 @@ app:
   # Browser origins allowed to call the API (the Vite dev server by default).
   cors-origins: ${APP_CORS_ORIGINS:http://localhost:5173}
   default-loan-days: 14
+  fine-per-day: ${APP_FINE_PER_DAY:5}
+  max-renewals: ${APP_MAX_RENEWALS:2}
+  hold-pickup-days: ${APP_HOLD_PICKUP_DAYS:3}
+  # On an empty database: load the 300-book catalog, then sample members, loans, history and holds.
+  seed-sample-data: ${APP_SEED_SAMPLE_DATA:true}
 
 ---
 # SQL Server profile: the original legacy elibraryDB on SQL Server Express. Run with --spring.profiles.active=sqlserver

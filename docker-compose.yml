@@ -1,0 +1,48 @@
+# One command starts MySQL, the API and the website, with the catalog and sample members loaded:
+#   docker compose up --build
+# Then open http://localhost:3000  (logins are in DEMO_ACCOUNTS.md)
+# Settings can be overridden in a .env file next to this one (see .env.example).
+
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: elibraryDB
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-elibrary}
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+  api:
+    build: ./server
+    environment:
+      DB_URL: jdbc:mysql://db:3306/elibraryDB?serverTimezone=UTC&allowPublicKeyRetrieval=true&useSSL=false
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-elibrary}
+      APP_JWT_SECRET: ${APP_JWT_SECRET:-docker-dev-secret-change-me-0123456789abcdef}
+      APP_CORS_ORIGINS: http://localhost:3000
+      APP_SEED_SAMPLE_DATA: ${APP_SEED_SAMPLE_DATA:-true}
+    volumes:
+      - covers:/app/book_inventory
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build: ./client
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  covers:

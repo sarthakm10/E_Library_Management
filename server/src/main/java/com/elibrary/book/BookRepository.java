@@ -24,8 +24,14 @@ public class BookRepository {
                 str(rs, "book_id"), str(rs, "book_name"), genres, str(rs, "author_name"), str(rs, "publisher_name"),
                 date(rs, "publish_date"), str(rs, "language"), str(rs, "edition"), intOf(rs, "book_cost"),
                 intOf(rs, "no_of_pages"), str(rs, "book_description"), intOf(rs, "actual_stock"), intOf(rs, "current_stock"),
-                link, Values.imageUrl(link));
+                link, Values.imageUrl(link), intOf(rs, "holds_ready"), intOf(rs, "holds_waiting"));
     };
+    private static final String SELECT = """
+            SELECT b.*,
+                   (SELECT COUNT(*) FROM book_hold_tbl h WHERE h.book_id = b.book_id AND h.status = 'ready') AS holds_ready,
+                   (SELECT COUNT(*) FROM book_hold_tbl h WHERE h.book_id = b.book_id AND h.status = 'waiting') AS holds_waiting
+            FROM book_master_tbl b
+            """;
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -34,11 +40,11 @@ public class BookRepository {
     }
 
     public List<Book> findAll() {
-        return jdbc.query("SELECT * FROM book_master_tbl ORDER BY book_name", MAPPER);
+        return jdbc.query(SELECT + " ORDER BY b.book_name", MAPPER);
     }
 
     public Optional<Book> findById(String bookId) {
-        return jdbc.query("SELECT * FROM book_master_tbl WHERE book_id = :id", new MapSqlParameterSource("id", bookId), MAPPER)
+        return jdbc.query(SELECT + " WHERE b.book_id = :id", new MapSqlParameterSource("id", bookId), MAPPER)
                 .stream().findFirst();
     }
 

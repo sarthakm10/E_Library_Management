@@ -2,15 +2,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import {
-  ArrowLeftRight, BookCopy, BookOpen, Building2, CornerDownLeft, Home, LayoutDashboard, LibraryBig, LogIn, LogOut,
-  Moon, PenTool, Search, UserPlus, UserRound, Users, type LucideIcon,
-} from 'lucide-react'
+import { ArrowLeftRight, BookCopy, BookOpen, Building2, CornerDownLeft, History, Home, LayoutDashboard, LibraryBig, LogIn, LogOut, Moon, PenTool, Search, UserPlus, UserRound, Users, type LucideIcon } from 'lucide-react'
 import { useAuth } from '@/auth/AuthContext'
 import { BookCover } from '@/components/book-cover'
 import { useBooks } from '@/lib/queries'
 import { toggleTheme } from '@/lib/theme'
-import { cn } from '@/lib/utils'
+import { availableCopies, cn } from '@/lib/utils'
 
 interface Item {
   id: string
@@ -77,6 +74,7 @@ function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
       pages.push(
         { id: 'a-dash', group: 'Admin', label: 'Dashboard', icon: LayoutDashboard, run: go('/admin') },
         { id: 'a-issue', group: 'Admin', label: 'Issue or return a book', icon: ArrowLeftRight, keywords: 'loan lend', run: go('/admin/issues') },
+        { id: 'a-history', group: 'Admin', label: 'History & fines', icon: History, keywords: 'returned late fine paid', run: go('/admin/history') },
         { id: 'a-books', group: 'Admin', label: 'Book inventory', icon: BookCopy, keywords: 'add edit', run: go('/admin/books') },
         { id: 'a-members', group: 'Admin', label: 'Members', icon: Users, keywords: 'approve activate', run: go('/admin/members') },
         { id: 'a-authors', group: 'Admin', label: 'Authors', icon: PenTool, run: go('/admin/authors') },
@@ -96,7 +94,7 @@ function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
           .slice(0, 6)
           .map((b) => ({
             id: `b-${b.bookId}`, group: 'Books', label: b.bookName,
-            hint: `${b.authorName} · ${b.currentStock > 0 ? `${b.currentStock} available` : 'all out'}`,
+            hint: `${b.authorName} · ${availableCopies(b) > 0 ? `${availableCopies(b)} available` : 'all out'}`,
             cover: { src: b.imageUrl, title: b.bookName }, run: go(`/books/${b.bookId}`),
           }))
       : []

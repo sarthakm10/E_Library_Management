@@ -1,16 +1,20 @@
 import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { BookX, Calendar, Globe, Hash, Layers, Search, SlidersHorizontal, X } from 'lucide-react'
+import { Bookmark, BookmarkCheck, BookX, Calendar, Globe, Hash, Layers, Search, SlidersHorizontal, X } from 'lucide-react'
 import { BookCover } from '@/components/book-cover'
 import { Tilt } from '@/components/fx/tilt'
 import { Badge, Card, EmptyState, Skeleton } from '@/components/ui/misc'
 import { Modal } from '@/components/ui/modal'
 import { Select } from '@/components/ui/field'
 import { Button } from '@/components/ui/button'
-import { useBooks } from '@/lib/queries'
-import { cn, currency, formatDate } from '@/lib/utils'
-import type { Book } from '@/lib/types'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { useAuth } from '@/auth/AuthContext'
+import { api, errorMessage } from '@/lib/api'
+import { keys, myHoldsQuery, useBooks } from '@/lib/queries'
+import { availableCopies, cn, currency, formatDate } from '@/lib/utils'
+import type { Book, Hold } from '@/lib/types'
 
 type SortKey = 'title' | 'newest' | 'available'
 
@@ -47,11 +51,11 @@ export function CatalogPage() {
       (!term || [b.bookName, b.authorName, b.publisherName, b.bookId, ...b.genres].some((v) => v.toLowerCase().includes(term))) &&
       (!genre || b.genres.includes(genre)) &&
       (!language || b.language === language) &&
-      (!onlyAvailable || b.currentStock > 0))
+      (!onlyAvailable || availableCopies(b) > 0))
     const sorted = [...list]
     if (sort === 'title') sorted.sort((a, b) => a.bookName.localeCompare(b.bookName))
     if (sort === 'newest') sorted.sort((a, b) => b.publishDate.localeCompare(a.publishDate))
-    if (sort === 'available') sorted.sort((a, b) => b.currentStock - a.currentStock)
+    if (sort === 'available') sorted.sort((a, b) => availableCopies(b) - availableCopies(a))
     return sorted
   }, [books, deferredQ, genre, language, onlyAvailable, sort])
 
@@ -169,9 +173,10 @@ function GenreChip({ label, active, onClick }: { label: string; active: boolean;
 }
 
 function Availability({ book }: { book: Book }) {
-  const [dot, label] = book.currentStock <= 0
-    ? ['bg-danger', 'All out']
-    : book.currentStock <= 1 ? ['bg-warning', 'Last copy'] : ['bg-success', `${book.currentStock} available`]
+  const free = availableCopies(book)
+  const [dot, label] = free <= 0
+    ? ['bg-danger', book.waiting ? `${book.waiting} waiting` : 'All out']
+    : free <= 1 ? ['bg-warning', 'Last copy'] : ['bg-success', `${free} available`]
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/65 px-2 py-0.5 text-[11px] font-medium text-white">
       <span className={cn('h-1.5 w-1.5 rounded-full', dot)} />{label}
@@ -222,12 +227,67 @@ function BookDetail({ book }: { book: Book }) {
         </div>
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border p-4">
           <div>
-            <p className="text-sm font-medium">{book.currentStock} of {book.actualStock} copies on the shelf</p>
-            <p className="text-xs text-muted">Ask at the desk with Book ID <span className="font-mono">{book.bookId}</span></p>
+            <p className="text-sm font-medium">{availableCopies(book)} of {book.actualStock} copies on the shelf</p>
+            <p className="text-xs text-muted">
+              {book.reserved > 0 && <>{book.reserved} kept aside for holds · </>}
+              {book.waiting > 0 && <>{book.waiting} waiting · </>}
+              Ask at the desk with Book ID <span className="font-mono">{book.bookId}</span>
+            </p>
           </div>
           {book.bookCost > 0 && <span className="text-sm text-muted">Value {currency.format(book.bookCost)}</span>}
         </div>
+        <HoldAction book={book} />
       </div>
+    </div>
+  )
+}
+
+/** Members can queue for a book with no copy on the shelf; guests are pointed to sign in. */
+function HoldAction({ book }: { book: Book }) {
+  const { user } = useAuth()
+  const isMember = user?.role === 'user'
+  const qc = useQueryClient()
+  const { data: holds } = useQuery({ ...myHoldsQuery, enabled: isMember })
+  const mine = holds?.find((h) => h.bookId === book.bookId)
+  const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: keys.books }), qc.invalidateQueries({ queryKey: keys.myHolds })])
+  const place = useMutation({
+    mutationFn: () => api.post<Hold>('/api/me/holds', { bookId: book.bookId }),
+    onSuccess: async (h) => { await refresh(); toast.success(`Hold placed. You're number ${h.position} in line`) },
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+  const cancel = useMutation({
+    mutationFn: () => api.del(`/api/me/holds/${book.bookId}`),
+    onSuccess: async () => { await refresh(); toast.success('Hold cancelled') },
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+
+  if (mine) {
+    return (
+      <div className={cn('mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4 text-sm',
+        mine.status === 'ready' ? 'bg-success-soft text-success' : 'bg-accent-soft text-accent')}>
+        <p className="flex items-center gap-2 font-medium">
+          <BookmarkCheck className="h-4 w-4" />
+          {mine.status === 'ready'
+            ? `A copy is waiting for you at the desk until ${formatDate(mine.readyUntil)}`
+            : `You're on hold, number ${mine.position} in line`}
+        </p>
+        <Button variant="ghost" size="sm" loading={cancel.isPending} onClick={() => cancel.mutate()}>Cancel hold</Button>
+      </div>
+    )
+  }
+  if (availableCopies(book) > 0) return null
+  if (!user) {
+    return (
+      <p className="mt-3 text-sm text-muted">
+        All copies are out. <Link to="/login" className="font-medium text-accent hover:underline">Sign in</Link> to place a hold and get the next one.
+      </p>
+    )
+  }
+  if (!isMember) return null
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-surface-2 p-4">
+      <p className="text-sm text-muted">All copies are out. Place a hold and we'll keep the next returned copy for you.</p>
+      <Button size="sm" loading={place.isPending} onClick={() => place.mutate()}><Bookmark className="h-4 w-4" />Place hold</Button>
     </div>
   )
 }

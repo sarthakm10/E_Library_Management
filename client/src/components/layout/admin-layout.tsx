@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeftRight, ArrowUpRight, BookCopy, Building2, LayoutDashboard, LogOut, Menu, PenTool, Search, Users, X } from 'lucide-react'
+import { ArrowLeftRight, ArrowUpRight, BookCopy, History, Building2, LayoutDashboard, LogOut, Menu, PenTool, Search, Users, X } from 'lucide-react'
 import { useAuth } from '@/auth/AuthContext'
 import { useCommandPalette } from '@/components/command-palette'
 import { Aurora } from '@/components/fx/aurora'
@@ -14,6 +14,7 @@ import { ThemeToggle } from './theme-toggle'
 const items = [
   { to: '/admin', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/admin/issues', label: 'Issue & return', icon: ArrowLeftRight },
+  { to: '/admin/history', label: 'History & fines', icon: History },
   { to: '/admin/books', label: 'Inventory', icon: BookCopy },
   { to: '/admin/members', label: 'Members', icon: Users },
   { to: '/admin/authors', label: 'Authors', icon: PenTool },

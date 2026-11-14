@@ -1,6 +1,7 @@
 package com.elibrary.book;
 
 import com.elibrary.common.ApiException;
+import com.elibrary.issue.HoldRepository;
 import com.elibrary.issue.IssueRepository;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -17,10 +18,12 @@ public class BookController {
 
     private final BookRepository books;
     private final IssueRepository issues;
+    private final HoldRepository holds;
 
-    public BookController(BookRepository books, IssueRepository issues) {
+    public BookController(BookRepository books, IssueRepository issues, HoldRepository holds) {
         this.books = books;
         this.issues = issues;
+        this.holds = holds;
     }
 
     // ---- public ----
@@ -75,6 +78,7 @@ public class BookController {
         if (open > 0) {
             throw ApiException.conflict("This book has " + open + " copies issued. Collect them before deleting it.");
         }
+        holds.deleteByBook(id);
         books.delete(id);
     }
 
