@@ -5,7 +5,7 @@ Builds a ~300-book catalog for the MySQL database.
   python server/db/seed_books.py --no-covers
 
 Covers come from Open Library (covers.openlibrary.org) and are saved to
-E_Library_Management/book_inventory/<bookId>.jpg, the folder the API serves at /book_inventory.
+server/book_inventory/<bookId>.jpg, the folder the API serves at /book_inventory.
 Books with no cover found keep the app's generated cover. Re-running skips covers already on disk.
 Load the SQL with:  mysql -u root -p elibraryDB < server/db/mysql-seed-books.sql
 """
@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-COVERS = ROOT / "E_Library_Management" / "book_inventory"
+COVERS = ROOT / "server" / "book_inventory"
 OUT_SQL = Path(__file__).resolve().parent / "mysql-seed-books.sql"
 UA = {"User-Agent": "ShelfwiseCatalogSeeder/1.0"}
 

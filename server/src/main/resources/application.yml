@@ -27,14 +27,14 @@ app:
     # Set APP_JWT_SECRET to a long random string (32+ characters) outside local development.
     secret: ${APP_JWT_SECRET:dev-only-secret-change-me-please-0123456789abcdef}
     ttl-hours: 12
-  # Folder holding book cover images. Defaults to the old Web Forms folder so both apps share covers.
-  upload-dir: ${APP_UPLOAD_DIR:../E_Library_Management/book_inventory}
+  # Folder holding book cover images (relative to where the API is started; server/ by default).
+  upload-dir: ${APP_UPLOAD_DIR:book_inventory}
   # Browser origins allowed to call the API (the Vite dev server by default).
   cors-origins: ${APP_CORS_ORIGINS:http://localhost:5173}
   default-loan-days: 14
 
 ---
-# SQL Server profile: the original Web Forms database. Run with --spring.profiles.active=sqlserver
+# SQL Server profile: the original legacy elibraryDB on SQL Server Express. Run with --spring.profiles.active=sqlserver
 spring:
   config:
     activate:

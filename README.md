@@ -6,9 +6,10 @@ A modern rewrite of the E-Library Management system:
 | --- | --- |
 | `client/` | React 18 + TypeScript + Vite + Tailwind CSS front end |
 | `server/` | Java 21 + Spring Boot 3 REST API (JWT auth) |
-| `E_Library_Management/` | The original ASP.NET Web Forms app (left untouched) |
+| `server/book_inventory/` | Book cover images, served at `/book_inventory/...` |
+| `server/db/` | Catalog seed (300 books), its generator script, and the SQL Server upgrade script |
 
-The API talks to your **existing `elibraryDB` SQL Server database**, using the same tables and columns as the old app, so no data migration is needed. Both apps can run side by side, and they share the `book_inventory/` cover images folder.
+It replaces the original ASP.NET Web Forms app, which is still in the git history (commit `977fcbc`). The API uses the same tables and columns as that app, so it can also run against the original SQL Server `elibraryDB` with no data migration.
 
 ## Quick start (demo data, no database needed)
 
@@ -39,18 +40,29 @@ Demo accounts (from `server/src/main/resources/db/demo/data.sql`):
 
 ## Running against MySQL (default)
 
-1. In MySQL Workbench: `CREATE DATABASE elibraryDB;`
-2. Start the API with your MySQL credentials (PowerShell):
+1. Create the database:
 
-   ```powershell
-   cd server
-   $env:DB_USERNAME = "root"
-   $env:DB_PASSWORD = "<your MySQL password>"
-   $env:APP_JWT_SECRET = "<any random text, 32+ characters>"
-   .\mvnw spring-boot:run
+   ```bash
+   mysql -u root -p -e "CREATE DATABASE elibraryDB CHARACTER SET utf8mb4"
    ```
 
-The tables are created automatically on first start (`server/src/main/resources/db/mysql/schema.sql`), along with a starter admin account, **admin / admin123**. Sign in as that admin, then add authors, publishers and books.
+2. Copy `server/.env.example` to `server/.env` and fill in your MySQL password (the file is git-ignored).
+3. Start the API:
+
+   ```bash
+   cd server
+   ./mvnw spring-boot:run
+   ```
+
+   The tables are created automatically on first start (`server/src/main/resources/db/mysql/schema.sql`), along with a starter admin account, **admin / admin123**. Change that password after you sign in.
+
+4. Load the catalog of 300 books (covers are already in `server/book_inventory/`):
+
+   ```bash
+   mysql -u root -p --default-character-set=utf8mb4 elibraryDB < server/db/mysql-seed-books.sql
+   ```
+
+   It's safe to run again. To change the book list or re-fetch covers from Open Library, edit and run `python server/db/seed_books.py`.
 
 ## Running against the original SQL Server database (`sqlserver` profile)
 
@@ -78,9 +90,9 @@ Add `--spring.profiles.active=sqlserver` (e.g. `.\mvnw spring-boot:run "-Dspring
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | local `SQLEXPRESS` | Database connection |
+| `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | local MySQL `elibraryDB` as `root` | Database connection (set them in `server/.env`) |
 | `APP_JWT_SECRET` | dev-only value (logs a warning) | Signs login tokens. **Set this outside local dev.** |
-| `APP_UPLOAD_DIR` | `../E_Library_Management/book_inventory` | Where cover images are read from and saved to |
+| `APP_UPLOAD_DIR` | `book_inventory` (relative to where the API starts, i.e. `server/`) | Where cover images are read from and saved to |
 | `APP_CORS_ORIGINS` | `http://localhost:5173` | Browser origins allowed to call the API |
 
 ## What changed compared to the old app
@@ -102,7 +114,7 @@ Add `--spring.profiles.active=sqlserver` (e.g. `.\mvnw spring-boot:run "-Dspring
 - Public landing page and a searchable, filterable catalog with book detail views.
 - Multi-step signup with validation, plus a member profile page with loan due-date countdowns and a password change form.
 - Admin dashboard with charts, overdue and due-soon lists, and one-click approval of new members.
-- Issue desk that looks up book and member names as you type and explains why an issue isn't allowed.
+- Issue desk with search-as-you-type pickers (title, author, name, phone or ID), the selected member's or book's loans with one-click return, and a clear reason when an issue isn't allowed.
 - Sortable, searchable tables; drag-and-drop cover upload; light and dark mode; works on phones.
 
 ## API overview
